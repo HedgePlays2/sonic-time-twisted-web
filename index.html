@@ -1,966 +1,2240 @@
+```html
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-	<base href="https://cdn.jsdelivr.net/gh/ant9012/sonic-time-twisted-web@main/" />
-    <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0" />
-	<link rel="icon" type="x-icon" href="favicon.png">
-	<title>Sonic Time Twisted Web Port</title>
-    <style>
-      @-webkit-keyframes rotation {
-        from {
-          -webkit-transform: rotate(0deg);
-        }
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-        to {
-          -webkit-transform: rotate(360deg);
-        }
+  <base href="https://cdn.jsdelivr.net/gh/ant9012/sonic-time-twisted-web@main/">
+
+  <meta name="viewport"
+        content="viewport-fit=cover,width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1">
+
+  <link rel="icon" type="image/x-icon" href="favicon.png">
+
+  <title>Sonic Time Twisted Web Port</title>
+
+  <style>
+    /* =========================================================
+       PERFORMANCE-FOCUSED CSS
+       ========================================================= */
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    body {
+      min-width: 100%;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, sans-serif;
+      overscroll-behavior: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    body.scrollingDisabled {
+      overflow: hidden;
+    }
+
+    /*
+      Keep the canvas pixelated without expensive filters.
+      IMPORTANT:
+      We do NOT force the internal canvas to 1920x1080.
+    */
+    canvas.emscripten {
+      display: none;
+      position: relative;
+      padding: 0;
+      border: 0;
+      margin: 0;
+      background: #000;
+
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+
+      /*
+        Avoid opacity transitions during gameplay.
+        These can cause unnecessary compositing work.
+      */
+      opacity: 1;
+
+      /*
+        Prevent the browser from trying to scroll/gesture
+        when interacting with the game canvas.
+      */
+      touch-action: none;
+
+      /*
+        Tell the browser this element is heavily updated.
+      */
+      contain: strict;
+    }
+
+    canvas.active {
+      display: block;
+      opacity: 1;
+    }
+
+    canvas.paused {
+      /*
+        The old version applied blur + grayscale here.
+        Filters can be expensive on Chromebooks, so pause
+        simply dims the canvas instead.
+      */
+      opacity: 0.75;
+    }
+
+    canvas.unpaused {
+      opacity: 1;
+    }
+
+    /* Loading screen */
+
+    .loading {
+      position: fixed;
+      inset: 0;
+
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+
+      pointer-events: none;
+      z-index: 10;
+
+      background: #000;
+    }
+
+    .loading > * {
+      margin: 8px;
+    }
+
+    .spinner {
+      width: 30px;
+      height: 30px;
+
+      border: 5px solid #bdff00;
+      border-top-color: #719900;
+      border-radius: 50%;
+
+      animation: rotation 0.8s linear infinite;
+    }
+
+    @keyframes rotation {
+      from {
+        transform: rotate(0deg);
       }
 
-      @-moz-keyframes rotation {
-        from {
-          -moz-transform: rotate(0deg);
-        }
-
-        to {
-          -moz-transform: rotate(360deg);
-        }
+      to {
+        transform: rotate(360deg);
       }
+    }
 
-      @-o-keyframes rotation {
-        from {
-          -o-transform: rotate(0deg);
-        }
+    .emscripten {
+      display: block;
+      text-align: center;
+      font-family: "Lucida Console", Monaco, monospace;
+    }
 
-        to {
-          -o-transform: rotate(360deg);
-        }
-      }
+    #status {
+      color: white;
+      font-weight: bold;
+      min-height: 18px;
+    }
 
-      @keyframes rotation {
-        from {
-          transform: rotate(0deg);
-        }
+    #progress {
+      width: 250px;
+      height: 10px;
+      padding: 0;
+      border: 0;
+    }
 
-        to {
-          transform: rotate(360deg);
-        }
-      }
+    progress[value]::-webkit-progress-bar {
+      background: #8492a6;
+      border-radius: 15px;
+    }
 
-      html {
-        background: #FFFFFF;
-      }
+    progress[value]::-webkit-progress-value {
+      background: linear-gradient(
+        to right,
+        #719900,
+        #bdff00
+      );
+      border-radius: 15px;
+    }
 
-      body {
-        font-family: arial;
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-        min-height: -webkit-fill-available;
-        min-height: fill-available;
-        min-height: 100vh; /* Otherwise contents can be covered by an address bar in Safari on iOS 15 */
-        min-width: 100vw;
-        background: radial-gradient(
-          56.63% 56.63% at 50% 43.37%,
-          transparent 0%,
-          transparent 100%
-        );
-		background-color: black;
-        display: flex;
-        flex-direction: column;
-        overflow-x: hidden;
-		place-items: center;
-      }
+    /* Bottom controls */
 
-      body.scrollingDisabled {
-        overflow: hidden;
-      }
+    .output-container {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
 
-      .emscripten {
-        padding-right: 0;
-        display: block;
-      }
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
 
-      div.emscripten {
-        text-align: center;
-		font-family: "Lucida Console", Monaco, monospace;
-      }
+      padding: 5px;
 
-      /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-      canvas.emscripten {
-        display: none;
-        background-color: black;
-        position: flex;
-        transition: opacity 5s ease-in;
-        -webkit-transition: opacity 5s ease-in;
-        opacity: 0;
-        filter: blur(0) grayscale(0);
-        image-rendering: optimizeSpeed;             /* Older versions of FF          */
-        image-rendering: -moz-crisp-edges;          /* FF 6.0+                       */
-        image-rendering: -webkit-optimize-contrast; /* Safari                        */
-        image-rendering: -o-crisp-edges;            /* OS X & Windows Opera (12.02+) */
-        image-rendering: pixelated;                 /* Awesome future-browsers       */
-        -ms-interpolation-mode: nearest-neighbor;   /* IE                            */
-      }
+      z-index: 20;
+      pointer-events: auto;
+    }
 
-      canvas.active {
-        animation-name: fadeIn;
-        animation-duration: 2s;
-        opacity: 1;
-      }
+    .output-button {
+      width: 200px;
+      height: 25px;
 
-      canvas.paused {
-        animation-name: blur;
-        animation-duration: 0.5s;
-        filter: blur(2px) grayscale(1);
-      }
+      margin: 5px;
 
-      canvas.unpaused {
-        animation-name: none;
-      }
+      border: 0;
+      border-radius: 5px;
 
-      canvas.animatedSizeTransitions {
-        transition: width 0.3s ease, height 0.3s ease;
-      }
+      background: #000;
+      color: #fff;
 
-      @keyframes fadeIn {
-        0% {
-          opacity: 0;
-        }
+      outline: 1px dashed #20c20e;
 
-        100% {
-          opacity: 1;
-        }
-      }
+      font-family: "Lucida Console", Monaco, monospace;
+      cursor: pointer;
 
-      @keyframes blur {
-        0% {
-          filter: blur(0) grayscale(0);
-        }
+      -webkit-user-select: none;
+      user-select: none;
+    }
 
-        100% {
-          filter: blur(2px) grayscale(1);
-        }
-      }
+    .output-button:active {
+      opacity: 0.7;
+    }
 
-      .spinner {
-        height: 30px;
-        width: 30px;
+    #output {
+      display: none;
 
-        -webkit-animation: rotation 0.8s linear infinite;
-        -moz-animation: rotation 0.8s linear infinite;
-        -o-animation: rotation 0.8s linear infinite;
-        animation: rotation 0.8s linear infinite;
+      width: 100%;
+      height: 200px;
 
-        border: 5px solid #bdff00;
-        border-top: 5px solid #719900;
-        border-radius: 100%;
-      }
+      padding: 0;
 
-      #status {
-        display: inline-block;
-        vertical-align: top;
-        font-weight: bold;
-        color: white;
-      }
+      border: 0;
+      outline: none;
 
-      #progress {
-        width: 250px;
-        height: 10px;
-        -webkit-appearance: none;
-        appearance: none;
-        padding: 5px;
-      }
+      resize: none;
 
-      /* Determines the style of the background of the progress bar */
-      progress[value]::-webkit-progress-bar {
-        background-color: #8492a6;
-        height: 10px;
-        border-radius: 15px;
-      }
-      /* Determines the style of the completed part of the progress bar */
-      progress[value]::-webkit-progress-value {
-        background-image: -webkit-linear-gradient(left, #719900, #bdff00);
-        height: 10px;
-        border-radius: 15px;
-      }
+      background: #000;
+      color: #fff;
 
-      div.loading {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        pointer-events: none;
-      }
-      div.loading > * {
-        padding: 10px;
-        margin: 10px;
-      }
+      font-family: "Lucida Console", Monaco, monospace;
 
+      /*
+        Don't repaint the textarea while the game runs.
+      */
+      contain: strict;
+    }
+
+    /* Messages */
+
+    #message-container {
+      display: none;
+
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+
+      min-height: 50px;
+
+      background: rgba(20,20,20,.5);
+
+      z-index: 30;
+    }
+
+    #messages {
+      margin-left: 50px;
+
+      color: #fff;
+
+      font-family: "Lucida Console", Monaco, monospace;
+    }
+
+    /* Pause menu */
+
+    #pauseMenuContainer {
+      position: fixed;
+      inset: 0;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      z-index: 50;
+
+      pointer-events: auto;
+    }
+
+    #pauseMenuContainer[hidden] {
+      display: none !important;
+    }
+
+    #pauseMenuBorder {
+      width: min(70vw, 400px);
+
+      padding: 1px;
+
+      background: linear-gradient(
+        135deg,
+        #FA1E4E,
+        transparent 40%
+      );
+
+      border-radius: 4px;
+
+      clip-path: polygon(
+        10.5px 0,
+        100% 0,
+        100% 100%,
+        0 100%,
+        0 10.5px
+      );
+    }
+
+    #pauseMenu {
+      display: flex;
+      flex-direction: column;
+
+      padding: 60px 30px;
+
+      background: linear-gradient(
+        180deg,
+        #2E273F 16.15%,
+        rgba(46,39,63,.79) 56.25%,
+        #2E273F 91.15%
+      );
+
+      border-radius: 4px;
+
+      clip-path: polygon(
+        10px 0,
+        100% 0,
+        100% 100%,
+        0 100%,
+        0 10px
+      );
+    }
+
+    #pauseMenu button {
+      padding: 12px 24px;
+      margin: 5px 0;
+
+      border: 1px solid #FA1E4E;
+      border-radius: 6px;
+
+      background: #FA1E4E;
+      color: #fff;
+
+      font-size: 17px;
+      font-weight: 500;
+
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    #pauseMenu button#quitButton {
+      background: #FA1E4E40;
+    }
+
+    #pauseMenu button:active {
+      opacity: .75;
+    }
+
+    #pauseMenu button[hidden] {
+      display: none;
+    }
+
+    #colorpicker {
+      width: 45px;
+      height: 25px;
+      margin: 5px;
+    }
+
+    /*
+      Chromebook / small screen optimization.
+      Hide the debug controls on very small screens.
+    */
+    @media (max-width: 600px) {
       .output-container {
-        text-align: center;
-        margin-top: auto;
-      }
-      .output-button {
-        border: none;
-        width: 200px;
-        height: 25px;
-        margin: 5px;
-        border-radius: 5px;
-        cursor: pointer;
-        background-color: black;
-        color: white;
-		outline-color: #20c20e;
-		outline-style: dashed;
-        font-family: "Lucida Console", Monaco, monospace;
-      }
-
-      #output {
         display: none;
-        height: 200px;
-        background-color: black;
-        color: white;
-        font-family: "Lucida Console", Monaco, monospace;
-        outline: none;
-        border: none;
-        padding: 0;
-        width: 100%;
-      }
-
-      #message-container {
-        display: none;
-        min-height: 50px;
-        background-color: rgba(20, 20, 20, 0.5);
-        outline: none;
-        border: none;
-        padding: 0;
-        width: 100%;
-        position: absolute;
-        top: 0;
-      }
-
-      #messages {
-        margin-left: 50px;
-        color: white;
-        font-family: "Lucida Console", Monaco, monospace;
-        outline: none;
-        border: none;
-        padding: 0;
-      }
-
-      img.qrCode {
-         opacity: 1.0;
-         width: 50%;
-         height: 50%;
-      }
-
-      #pauseMenuContainer {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      #pauseMenuContainer[hidden] {
-        display: none !important;
-        opacity: 0;
       }
 
       #pauseMenuBorder {
-        background: linear-gradient(135deg, #FA1E4E, transparent 40%);
-        padding: 1px;
-        border-radius: 4px;
-        clip-path: polygon(10.5px 0, 100% 0, 100% 100%, 0 100%, 0 10.5px);
-        width: 70vw;
-        max-width: 400px;
+        width: 85vw;
       }
+    }
 
-      #pauseMenu {
-        display: flex;
-        flex-direction: column;
-        padding: 60px 30px 60px 30px;
-        background: linear-gradient(180deg, #2E273F 16.15%, rgba(46, 39, 63, 0.79) 56.25%, #2E273F 91.15%);
-        border-radius: 4px;
-        clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);
-        animation-name: fadeIn;
-        animation-duration: 0.5s;
-        opacity: 1;
+    @media (prefers-reduced-motion: reduce) {
+      .spinner {
+        animation: none;
       }
+    }
+  </style>
 
-      #pauseMenu button {
-        font-weight: 500;
-        font-size: 17px;
-        color: white;
-        background: #FA1E4E;
-        border: 1px solid #FA1E4E;
-        border-radius: 6px;
-        padding: 12px 24px;
-        margin: 5px 0;
-        -webkit-user-select: none;
-        user-select: none;
-      }
+  <!-- Start downloading the engine as early as possible. -->
+  <link rel="preload"
+        href="runner.js"
+        as="script"
+        crossorigin>
 
-      #pauseMenu button#quitButton {
-        background: #FA1E4E40;
-      }
+</head>
 
-      #pauseMenu button:hover {
-        filter: brightness(1.15);
-      }
+<body>
 
-      #pauseMenu button:active {
-        filter: brightness(0.85);
-      }
+  <!-- =======================================================
+       GAME CANVAS
+       ======================================================= -->
 
-      #pauseMenu button[hidden] {
-        display: none;
-      }
-    </style>
-  </head>
-  <body>
-    <canvas
-      class="emscripten"
-      id="canvas"
-      oncontextmenu="event.preventDefault()"
-      tabindex="-1"
-    >
-    </canvas>
-    <div id="pauseMenuContainer" hidden>
-      <div id="pauseMenuBorder">
-        <div id="pauseMenu">
-          <button id="resumeButton" onclick="resume()">
-            Resume
-          </button>
-          <button id="quitButton" onclick="quitIfSupported()">
-            Quit
-          </button>
-        </div>
-        </div>
-    </div>
-    <div class="loading">
-      <div class="spinner" id="spinner"></div>
-      <div class="emscripten" id="status">Downloading...</div>
+  <canvas
+    class="emscripten"
+    id="canvas"
+    tabindex="-1"
+    oncontextmenu="event.preventDefault()">
+  </canvas>
 
-      <progress value="0" max="100" id="progress" hidden="1"></progress>
-    </div>
-    <div class="output-container" id="output-container">
-	  <button class="output-button" onclick="toggleConsole()" title="Lists Console Output and Loading Progress"+>
-        Toggle Console
-      </button>
-	  <button id="QRButton" class="output-button" onclick="togglegithub()" title="Sends you to the source Github Repository of this Project"+>
-        Visit Github Repo
-      </button>
-	  <button id="QR2Button" class="output-button" onclick="toggleclear_site_cache()" title="Fixes Crashes due to the Website being Updated, but also Deletes ALL Saves, so Continue with Caution"+>
-        Clear Site Cache
-      </button>
-		<button class="output-button" id="stats-button" onclick="toggleFPS()" title="Enables External FPS Counter"+>
-        Enable FPS Counter
-      </button>
-	    <button class="output-button" id="share-button" onclick="togglewebports()" title="Sends you to My Personal Website with a List of All My Web Ports"+>
-        View All Web Ports
-      </button>
-	    <input id="colorpicker" type="color" onchange="changecolor(this)" title="Changes Color of the Website's Background"+>
-      <textarea id="output" rows="8"></textarea>
-    </div>
 
-    <div id="message-container">
-      <div id="messages">
+  <!-- =======================================================
+       PAUSE MENU
+       ======================================================= -->
+
+  <div id="pauseMenuContainer" hidden>
+
+    <div id="pauseMenuBorder">
+
+      <div id="pauseMenu">
+
+        <button
+          id="resumeButton"
+          type="button"
+          onclick="resume()">
+          Resume
+        </button>
+
+        <button
+          id="quitButton"
+          type="button"
+          onclick="quitIfSupported()">
+          Quit
+        </button>
+
       </div>
+
     </div>
-	<script async
-     data-ad-client="ca-pub-123"
-     data-ad-frequency-hint="30s"
-     data-adbreak-test="on"
-     src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js">
-   </script>
 
-   <script>
-     window.adsbygoogle = window.adsbygoogle || [];
-     const adBreak =  adConfig = function(o) {adsbygoogle.push(o);}
-   </script>
+  </div>
 
-    <script type="text/javascript">
-	// === MULTI-PART FILE JOINER PATCH ===
-	// Intercepts requests for game.unx and stitches 4 parts together seamlessly
-	(function() {
-	  const TARGET_FILE = 'game.unx';
-	  const NUM_PARTS = 4;
 
-	  async function fetchAndCombine(baseUrl) {
-		const partUrls = [];
-		for (let i = 1; i <= NUM_PARTS; i++) {
-		  partUrls.push(`${baseUrl}.part${i}`);
-		}
-		
-		// Fetch all parts concurrently
-		const responses = await Promise.all(partUrls.map(url => originalFetch(url)));
-		for (const res of responses) {
-		  if (!res.ok) throw new Error(`Failed to download part: ${res.url}`);
-		}
-		
-		const buffers = await Promise.all(responses.map(res => res.arrayBuffer()));
-		const totalLength = buffers.reduce((sum, buf) => sum + buf.byteLength, 0);
-		const combined = new Uint8Array(totalLength);
-		
-		let offset = 0;
-		for (const buf of buffers) {
-		  combined.set(new Uint8Array(buf), offset);
-		  offset += buf.byteLength;
-		}
-		return combined.buffer;
-	  }
+  <!-- =======================================================
+       LOADING SCREEN
+       ======================================================= -->
 
-	  // Hook window.fetch
-	  const originalFetch = window.fetch;
-	  window.fetch = async function(input, init) {
-		const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : '');
-		if (url.endsWith(TARGET_FILE)) {
-		  try {
-			const combinedBuffer = await fetchAndCombine(url);
-			return new Response(combinedBuffer, {
-			  status: 200,
-			  statusText: 'OK',
-			  headers: { 'Content-Type': 'application/octet-stream' }
-			});
-		  } catch (err) {
-			console.error("Fetch patch failed for game.unx:", err);
-		  }
-		}
-		return originalFetch.apply(this, arguments);
-	  };
+  <div class="loading" id="loading">
 
-	  // Hook XMLHttpRequest (GameMaker engines often alternate between fetch and XHR)
-	  const OriginalXHR = window.XMLHttpRequest;
-	  window.XMLHttpRequest = function() {
-		const xhr = new OriginalXHR();
-		const originalOpen = xhr.open;
-		const originalSend = xhr.send;
-		let isTarget = false;
-		let targetUrl = '';
+    <div
+      class="spinner"
+      id="spinner">
+    </div>
 
-		xhr.open = function(method, url, ...args) {
-		  targetUrl = url;
-		  if (typeof url === 'string' && url.endsWith(TARGET_FILE)) {
-			isTarget = true;
-		  }
-		  return originalOpen.apply(this, [method, url, ...args]);
-		};
+    <div
+      class="emscripten"
+      id="status">
+      Downloading...
+    </div>
 
-		xhr.send = function(data) {
-		  if (isTarget) {
-			fetchAndCombine(targetUrl).then(combinedBuffer => {
-			  Object.defineProperty(xhr, 'readyState', { value: 4, configurable: true });
-			  Object.defineProperty(xhr, 'status', { value: 200, configurable: true });
-			  Object.defineProperty(xhr, 'statusText', { value: 'OK', configurable: true });
+    <progress
+      value="0"
+      max="100"
+      id="progress"
+      hidden>
+    </progress>
 
-			  let responseValue = combinedBuffer;
-			  if (xhr.responseType === 'blob') {
-				responseValue = new Blob([combinedBuffer]);
-			  } else if (xhr.responseType === 'text' || !xhr.responseType) {
-				responseValue = new TextDecoder().decode(combinedBuffer);
-				Object.defineProperty(xhr, 'responseText', { value: responseValue, configurable: true });
-			  }
+  </div>
 
-			  Object.defineProperty(xhr, 'response', { value: responseValue, configurable: true });
 
-			  if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange();
-			  if (typeof xhr.onload === 'function') xhr.onload();
-			}).catch(err => {
-			  console.error("XHR patch failed for game.unx:", err);
-			  Object.defineProperty(xhr, 'status', { value: 500, configurable: true });
-			  if (typeof xhr.onerror === 'function') xhr.onerror(err);
-			});
-			return;
-		  }
-		  return originalSend.apply(this, arguments);
-		};
+  <!-- =======================================================
+       DEBUG / EXTRA BUTTONS
+       ======================================================= -->
 
-		return xhr;
-	  };
-	  window.XMLHttpRequest.prototype = OriginalXHR.prototype;
-	})();
-	// === END OF MULTI-PART FILE JOINER PATCH ===
+  <div
+    class="output-container"
+    id="output-container">
 
-	// Background Color Changer Function
-	function changecolor(el) {
-		document.body.style.backgroundColor = el.value;
-	}
-	
-      const CHANGE_ASPECT_RATIO = true;
-		// Main Page Elements
-      var bodyElement = document.getElementsByTagName("body")[0];
-      var statusElement = document.getElementById("status");
-      var progressElement = document.getElementById("progress");
-      var spinnerElement = document.getElementById("spinner");
-      var canvasElement = document.getElementById("canvas");
-      var outputElement = document.getElementById("output");
-      var outputContainerElement = document.getElementById("output-container");
-      var qrElement = document.getElementById("QRCode");
-      var qr2Element = document.getElementById("QR2Code");
-      var qrButton = document.getElementById("QRButton");
-      var qr2Button = document.getElementById("QR2Button");
-      var pauseMenu = document.getElementById("pauseMenuContainer");
-      var resumeButton = document.getElementById("resumeButton");
-      var quitButton = document.getElementById("quitButton");
+    <button
+      class="output-button"
+      type="button"
+      onclick="toggleConsole()"
+      title="Lists Console Output and Loading Progress">
+      Toggle Console
+    </button>
 
-      const messageContainerElement = document.getElementById("message-container");
-      const messagesElement = document.getElementById("messages");
-      let rollbackMessages = [];
+    <button
+      id="QRButton"
+      class="output-button"
+      type="button"
+      onclick="togglegithub()"
+      title="Sends you to the source Github Repository of this Project">
+      Visit Github Repo
+    </button>
 
-      let clearRollbackMessagesTimeoutId = -1;
-      const showRollbackMessage = function (message) {
-        let messages = "";
-        rollbackMessages.push(message);
-        rollbackMessages.forEach(m => messages += "<p>" + m + "</p>");
+    <button
+      id="QR2Button"
+      class="output-button"
+      type="button"
+      onclick="toggleclear_site_cache()"
+      title="Fixes crashes due to the website being updated, but also deletes ALL saves">
+      Clear Site Cache
+    </button>
 
-        messagesElement.innerHTML = messages;
-        messageContainerElement.style.display = 'block';
+    <button
+      class="output-button"
+      id="stats-button"
+      type="button"
+      onclick="toggleFPS()"
+      title="Enables External FPS Counter">
+      Enable FPS Counter
+    </button>
 
-        if (clearRollbackMessagesTimeoutId === -1) {
-          clearTimeout(clearRollbackMessagesTimeoutId);
+    <button
+      class="output-button"
+      id="share-button"
+      type="button"
+      onclick="togglewebports()"
+      title="Sends you to my personal website with a list of all my web ports">
+      View All Web Ports
+    </button>
+
+    <input
+      id="colorpicker"
+      type="color"
+      value="#000000"
+      onchange="changecolor(this)"
+      title="Changes Color of the Website's Background">
+
+    <textarea
+      id="output"
+      rows="8"
+      spellcheck="false">
+    </textarea>
+
+  </div>
+
+
+  <!-- =======================================================
+       MESSAGE CONTAINER
+       ======================================================= -->
+
+  <div id="message-container">
+    <div id="messages"></div>
+  </div>
+
+
+  <!-- =======================================================
+       ADS
+       ======================================================= -->
+
+  <script
+    async
+    data-ad-client="ca-pub-123"
+    data-ad-frequency-hint="30s"
+    data-adbreak-test="on"
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js">
+  </script>
+
+  <script>
+    window.adsbygoogle = window.adsbygoogle || [];
+
+    const adBreak = adConfig = function(o) {
+      adsbygoogle.push(o);
+    };
+  </script>
+
+
+  <!-- =======================================================
+       GAME.UNX MULTI-PART LOADER
+       =======================================================
+
+       The game.unx file is split into four parts.
+
+       The important optimization here is that all four
+       pieces are downloaded concurrently.
+
+       We also cache the combined result so that repeated
+       requests don't download and join the four pieces again.
+       ======================================================= -->
+
+  <script>
+  (() => {
+
+    "use strict";
+
+    const TARGET_FILE = "game.unx";
+    const NUM_PARTS = 4;
+
+    const combinedCache = new Map();
+    const pendingRequests = new Map();
+
+    const originalFetch = window.fetch.bind(window);
+    const OriginalXHR = window.XMLHttpRequest;
+
+
+    async function fetchAndCombine(baseUrl) {
+
+      /*
+        Reuse a completed result.
+      */
+      if (combinedCache.has(baseUrl)) {
+        return combinedCache.get(baseUrl);
+      }
+
+      /*
+        If multiple requests arrive at the same time,
+        only perform the expensive join once.
+      */
+      if (pendingRequests.has(baseUrl)) {
+        return pendingRequests.get(baseUrl);
+      }
+
+      const promise = (async () => {
+
+        const urls = new Array(NUM_PARTS);
+
+        for (let i = 0; i < NUM_PARTS; i++) {
+          urls[i] = `${baseUrl}.part${i + 1}`;
         }
-        clearRollbackMessagesTimeoutId = setTimeout(clearRollbackMessages, 5000);
-      };
 
-      const clearRollbackMessages = function () {
-        clearRollbackMessagesTimeoutId = -1;
-        rollbackMessages = [];
-        messageContainerElement.style.display = 'none';
-      };
-		
-	  // for displaying contents of console to display as a single line of text
-	  // stopload is set to 0, as to initialize it
-	  var loadprogress = 0;
-		
-      var startingHeight, startingWidth;
-      var startingAspect;
-      var Module = {
-        preRun: [],
-        postRun: [],
-        print: (function () {
-          var element = document.getElementById("output");
-          if (element) element.value = ""; // clear browser cache
-          return function (text) {
-		  
-		  // for displaying contents of console to display as a single line of text
-		  // if loading has started
-			if (text === "Starting WAD") {
-			// tells if statement below to display ALL loading strings
-				loadprogress += 1;
-			}
-	  
-			// if loading has started
-			if (loadprogress === 1) {
-			// allow console to be displayed as text on-screen
-				Module.setStatus(text);
-			}
-			// if game has started
-			// greater than or equal to just in case
-			else if (loadprogress >= 2) {
-			// then set load text to nothing
-				Module.setStatus("");
-			}
-		    // back to normal shit
-			
-            if (arguments.length > 1)
-              text = Array.prototype.slice.call(arguments).join(" ");
-			// for normal console
-            console.log(text);
-            if (text === "Entering main loop.") {
-              // It seems that this text ensures game is loaded.
-              ensureAspectRatio();
-			  // below are custom
-			  // stops loading text on game run
-			  loadprogress += 1;
-              // This Forces 1920x1080 aspect ratio on game startup
-              canvas.width = 1920;
-              canvas.height = 1080;
+        /*
+          Download all four pieces concurrently.
+        */
+        const responses = await Promise.all(
+          urls.map(url => originalFetch(url))
+        );
 
-			  // TRUE END of custom shit
-            }
-            if (element) {
-              element.value += text + "\n";
-              element.scrollTop = element.scrollHeight; // focus on bottom
-            }
-          };
-        })(),
-        printErr: function (text) {
-          if (arguments.length > 1)
-            text = Array.prototype.slice.call(arguments).join(" ");
-          console.error(text);
-        },
-        canvas: (function () {
-          var canvas = document.getElementById("canvas");
+        for (const response of responses) {
 
-          return canvas;
-        })(),
-        setStatus: function (text) {
-          if (!Module.setStatus.last)
-            Module.setStatus.last = { time: Date.now(), text: "" };
-          if (text === Module.setStatus.last.text) return;
-          var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
-          var now = Date.now();
-          if (m && now - Module.setStatus.last.time < 30) return; // if this is a progress update, skip it if too soon
-          Module.setStatus.last.time = now;
-          Module.setStatus.last.text = text;
-          if (m) {
-            text = m[1];
-            progressElement.value = parseInt(m[2]) * 100;
-            progressElement.max = parseInt(m[4]) * 100;
-            progressElement.hidden = false;
-            spinnerElement.hidden = false;
-          } else {
-            progressElement.value = null;
-            progressElement.max = null;
-            progressElement.hidden = true;
-
-            // If there are no status text, we are finished and can display
-            // the canvas and hide the spinner
-            if (!text) {
-              spinnerElement.style.display = "none";
-              canvasElement.style.display = "block";
-            }
+          if (!response.ok) {
+            throw new Error(
+              `Failed to download part: ${response.url}`
+            );
           }
-          statusElement.innerHTML = text;
-        },
-        totalDependencies: 0,
-        monitorRunDependencies: function (left) {
-          this.totalDependencies = Math.max(this.totalDependencies, left);
-          Module.setStatus(
-            left
-              ? "Preparing... (" +
-                  (this.totalDependencies - left) +
-                  "/" +
-                  this.totalDependencies +
-                  ")"
-              : "All downloads complete."
+
+        }
+
+        /*
+          Read the four files concurrently.
+        */
+        const buffers = await Promise.all(
+          responses.map(response => response.arrayBuffer())
+        );
+
+        let totalLength = 0;
+
+        for (const buffer of buffers) {
+          totalLength += buffer.byteLength;
+        }
+
+        /*
+          Only one combined allocation.
+        */
+        const combined = new Uint8Array(totalLength);
+
+        let offset = 0;
+
+        for (const buffer of buffers) {
+
+          combined.set(
+            new Uint8Array(buffer),
+            offset
           );
-        },
+
+          offset += buffer.byteLength;
+
+        }
+
+        const result = combined.buffer;
+
+        /*
+          Cache the combined result for this page session.
+        */
+        combinedCache.set(baseUrl, result);
+
+        pendingRequests.delete(baseUrl);
+
+        return result;
+
+      })().catch(error => {
+
+        pendingRequests.delete(baseUrl);
+        throw error;
+
+      });
+
+      pendingRequests.set(baseUrl, promise);
+
+      return promise;
+    }
+
+
+    /*
+      FETCH PATCH
+    */
+
+    window.fetch = async function(input, init) {
+
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof Request
+            ? input.url
+            : "";
+
+      if (url.endsWith(TARGET_FILE)) {
+
+        try {
+
+          const combinedBuffer =
+            await fetchAndCombine(url);
+
+          return new Response(
+            combinedBuffer,
+            {
+              status: 200,
+              statusText: "OK",
+              headers: {
+                "Content-Type":
+                  "application/octet-stream"
+              }
+            }
+          );
+
+        } catch (error) {
+
+          console.error(
+            "Fetch patch failed for game.unx:",
+            error
+          );
+
+        }
+
+      }
+
+      return originalFetch(input, init);
+    };
+
+
+    /*
+      XHR PATCH
+      GameMaker can use XHR instead of fetch.
+    */
+
+    window.XMLHttpRequest = function() {
+
+      const xhr = new OriginalXHR();
+
+      const originalOpen = xhr.open.bind(xhr);
+      const originalSend = xhr.send.bind(xhr);
+
+      let isTarget = false;
+      let targetUrl = "";
+
+
+      xhr.open = function(method, url, ...args) {
+
+        targetUrl = String(url);
+
+        isTarget =
+          targetUrl.endsWith(TARGET_FILE);
+
+        return originalOpen(
+          method,
+          url,
+          ...args
+        );
       };
-      Module.setStatus("Downloading...");
-      window.onerror = function (event) {
-        // TODO: do not warn on ok events like simulating an infinite loop or exitStatus
-        Module.setStatus("Exception thrown, see JavaScript console");
-        spinnerElement.style.display = "none";
-        Module.setStatus = function (text) {
-          if (text) Module.printErr("[post-exception status] " + text);
+
+
+      xhr.send = function(data) {
+
+        if (!isTarget) {
+          return originalSend(data);
+        }
+
+
+        fetchAndCombine(targetUrl)
+          .then(buffer => {
+
+            /*
+              Reproduce the minimum XHR state needed
+              by the GameMaker loader.
+            */
+
+            Object.defineProperty(
+              xhr,
+              "readyState",
+              {
+                value: 4,
+                configurable: true
+              }
+            );
+
+            Object.defineProperty(
+              xhr,
+              "status",
+              {
+                value: 200,
+                configurable: true
+              }
+            );
+
+            Object.defineProperty(
+              xhr,
+              "statusText",
+              {
+                value: "OK",
+                configurable: true
+              }
+            );
+
+
+            let responseValue = buffer;
+
+
+            if (xhr.responseType === "blob") {
+
+              responseValue =
+                new Blob([buffer]);
+
+            } else if (
+              xhr.responseType === "text" ||
+              !xhr.responseType
+            ) {
+
+              responseValue =
+                new TextDecoder().decode(buffer);
+
+              Object.defineProperty(
+                xhr,
+                "responseText",
+                {
+                  value: responseValue,
+                  configurable: true
+                }
+              );
+
+            }
+
+
+            Object.defineProperty(
+              xhr,
+              "response",
+              {
+                value: responseValue,
+                configurable: true
+              }
+            );
+
+
+            if (
+              typeof xhr.onreadystatechange ===
+              "function"
+            ) {
+              xhr.onreadystatechange();
+            }
+
+            if (
+              typeof xhr.onload ===
+              "function"
+            ) {
+              xhr.onload();
+            }
+
+          })
+          .catch(error => {
+
+            console.error(
+              "XHR patch failed for game.unx:",
+              error
+            );
+
+            Object.defineProperty(
+              xhr,
+              "status",
+              {
+                value: 500,
+                configurable: true
+              }
+            );
+
+            if (
+              typeof xhr.onerror ===
+              "function"
+            ) {
+              xhr.onerror(error);
+            }
+
+          });
+
+      };
+
+
+      return xhr;
+    };
+
+
+    window.XMLHttpRequest.prototype =
+      OriginalXHR.prototype;
+
+  })();
+  </script>
+
+
+  <!-- =======================================================
+       MAIN GAME SCRIPT
+       ======================================================= -->
+
+  <script>
+  "use strict";
+
+
+  /* =========================================================
+     DOM REFERENCES
+     ========================================================= */
+
+  const bodyElement =
+    document.body;
+
+  const statusElement =
+    document.getElementById("status");
+
+  const progressElement =
+    document.getElementById("progress");
+
+  const spinnerElement =
+    document.getElementById("spinner");
+
+  const loadingElement =
+    document.getElementById("loading");
+
+  const canvasElement =
+    document.getElementById("canvas");
+
+  const outputElement =
+    document.getElementById("output");
+
+  const outputContainerElement =
+    document.getElementById("output-container");
+
+  const pauseMenu =
+    document.getElementById(
+      "pauseMenuContainer"
+    );
+
+  const quitButton =
+    document.getElementById(
+      "quitButton"
+    );
+
+  const messageContainerElement =
+    document.getElementById(
+      "message-container"
+    );
+
+  const messagesElement =
+    document.getElementById(
+      "messages"
+    );
+
+
+  /* =========================================================
+     PERFORMANCE SETTINGS
+     ========================================================= */
+
+  /*
+    IMPORTANT:
+
+    The old HTML explicitly did:
+
+      canvas.width = 1920;
+      canvas.height = 1080;
+
+    That has been removed.
+
+    We allow GameMaker to decide its internal resolution.
+  */
+
+  const CHANGE_ASPECT_RATIO = true;
+
+
+  let startingHeight;
+  let startingWidth;
+  let startingAspect;
+
+
+  /* =========================================================
+     BACKGROUND COLOR
+     ========================================================= */
+
+  function changecolor(element) {
+
+    bodyElement.style.backgroundColor =
+      element.value;
+
+  }
+
+
+  /* =========================================================
+     MESSAGE SYSTEM
+     ========================================================= */
+
+  let rollbackMessages = [];
+  let clearRollbackMessagesTimeoutId = -1;
+
+
+  function showRollbackMessage(message) {
+
+    rollbackMessages.push(message);
+
+    /*
+      Build once instead of repeatedly modifying the DOM.
+    */
+    messagesElement.textContent =
+      rollbackMessages.join("\n");
+
+    messageContainerElement.style.display =
+      "block";
+
+
+    clearTimeout(
+      clearRollbackMessagesTimeoutId
+    );
+
+    clearRollbackMessagesTimeoutId =
+      setTimeout(
+        clearRollbackMessages,
+        5000
+      );
+
+  }
+
+
+  function clearRollbackMessages() {
+
+    clearRollbackMessagesTimeoutId = -1;
+
+    rollbackMessages.length = 0;
+
+    messageContainerElement.style.display =
+      "none";
+
+  }
+
+
+  /* =========================================================
+     GAME OUTPUT
+     ========================================================= */
+
+  let loadprogress = 0;
+
+
+  const Module = {
+
+    preRun: [],
+
+    postRun: [],
+
+
+    /*
+      Keep normal console output cheap.
+
+      The old version appended every single message
+      directly to the textarea, which can become expensive.
+    */
+
+    print: (() => {
+
+      const element =
+        outputElement;
+
+      if (element) {
+        element.value = "";
+      }
+
+
+      return function(text) {
+
+        if (arguments.length > 1) {
+
+          text =
+            Array.prototype
+              .slice
+              .call(arguments)
+              .join(" ");
+
+        }
+
+
+        /*
+          Loading messages still update the status.
+        */
+
+        if (text === "Starting WAD") {
+          loadprogress++;
+        }
+
+
+        if (loadprogress === 1) {
+
+          Module.setStatus(text);
+
+        } else if (loadprogress >= 2) {
+
+          Module.setStatus("");
+
+        }
+
+
+        /*
+          Only write the huge console output if
+          the user has actually opened it.
+
+          This saves DOM work during normal gameplay.
+        */
+
+        if (
+          outputElement.style.display !==
+          "none"
+        ) {
+
+          outputElement.value +=
+            text + "\n";
+
+          outputElement.scrollTop =
+            outputElement.scrollHeight;
+
+        }
+
+
+        /*
+          GameMaker uses this message to indicate
+          the main loop has started.
+        */
+
+        if (
+          text === "Entering main loop."
+        ) {
+
+          loadprogress++;
+
+          ensureAspectRatio();
+
+        }
+
+      };
+
+    })(),
+
+
+    printErr: function(text) {
+
+      if (arguments.length > 1) {
+
+        text =
+          Array.prototype
+            .slice
+            .call(arguments)
+            .join(" ");
+
+      }
+
+      console.error(text);
+
+    },
+
+
+    canvas: canvasElement,
+
+
+    setStatus: function(text) {
+
+      if (!Module.setStatus.last) {
+
+        Module.setStatus.last = {
+          time: Date.now(),
+          text: ""
         };
-      };
 
-      // Route URL GET parameters to argc+argv
-      if (typeof window === "object") {
-        Module['arguments'] = window.location.search.substr(1).trim().split('&');
-        // If no args were passed arguments = [''], in which case kill the single empty string.
-        if (!Module['arguments'][0]) {
-          Module['arguments'] = [];
+      }
+
+
+      if (
+        text ===
+        Module.setStatus.last.text
+      ) {
+        return;
+      }
+
+
+      const match =
+        text.match(
+          /([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/
+        );
+
+
+      const now =
+        Date.now();
+
+
+      /*
+        Avoid updating the DOM dozens of times
+        per second during downloads.
+      */
+
+      if (
+        match &&
+        now - Module.setStatus.last.time < 50
+      ) {
+        return;
+      }
+
+
+      Module.setStatus.last.time =
+        now;
+
+      Module.setStatus.last.text =
+        text;
+
+
+      if (match) {
+
+        text = match[1];
+
+        progressElement.value =
+          parseInt(match[2], 10) * 100;
+
+        progressElement.max =
+          parseInt(match[4], 10) * 100;
+
+        progressElement.hidden =
+          false;
+
+        spinnerElement.hidden =
+          false;
+
+      } else {
+
+        progressElement.hidden =
+          true;
+
+
+        if (!text) {
+
+          spinnerElement.style.display =
+            "none";
+
+          loadingElement.style.display =
+            "none";
+
+          canvasElement.style.display =
+            "block";
+
+          canvasElement.classList.add(
+            "active"
+          );
+
         }
-      }
-	  
-	  // All Button Functions
-	  
-		// Stock Toggle Console Function
-      function toggleConsole() {
-        var isShown = outputElement.style.display === "flex";
-        if (isShown) {
-          outputElement.style.display = "none";
-          outputElement.scrollIntoView(false);
-        } else {
-          outputElement.style.display = "flex";
-          outputElement.scrollIntoView(true);
-        }
-      }
-		// Go To Github Function
-      function togglegithub() {
-	    window.open("https://github.com/overbound/SonicTimeTwisted", '_blank').focus();
-      }
-		// Clear Site Cache Function
-      function toggleclear_site_cache() {
-	  // Trigger Choice Popup
-		if (confirm("This Will Clear Site Cache\nThis will ALSO Clear ALL SAVES\nONLY do this if the Site has recently been Updated\nand if you are experiencing crashes relating to texture loading\nContinue?")) {
-		// User clicked OK
-		
-		// Clear All IndexedDB Databases
-		(async () => {
-			const dbs = await window.indexedDB.databases();
-			dbs.forEach(db => { window.indexedDB.deleteDatabase(db.name) });
-			})();
-			
-		// 
-		alert("All Site Cache Has been Cleared!\nPlease reload the Page");
-		} else {
-		// User clicked Cancel
-		// Do nothing
-		}
-	  }
 
-		// Enable FPS Counter Button
-	  var stopfps = 0;
-      function toggleFPS() {
-	  // to stop it from making multiple instances after 1 has already been made
-	  stopfps += 1
-	  // if pressed ONLY once
-	  if (stopfps === 1) {
-	    window.location.href = "javascript:(function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()"
-        }
-		// so it can't go crazy high, but can't be activated again
-		if (stopfps >= 5) {
-		stopfps = 2;
-		}
-	  }
-	    // Go To Website of Web Ports Function
-	  function togglewebports() {
-		window.open("https://burnedwebsite.vercel.app/projects/", '_blank').focus();
-	  }
-		// End of Button Functions
-
-      var g_pWadLoadCallback = undefined;
-      function setWadLoadCallback( _wadLoadCallback ) 
-      {
-        g_pWadLoadCallback = _wadLoadCallback;
       }
 
-      var g_pAddAsyncMethod = -1;
 
-      function setAddAsyncMethod( asyncMethod )
-      {
-        g_pAddAsyncMethod = asyncMethod;
+      statusElement.textContent =
+        text;
+
+    },
+
+
+    totalDependencies: 0,
+
+
+    monitorRunDependencies: function(left) {
+
+      this.totalDependencies =
+        Math.max(
+          this.totalDependencies,
+          left
+        );
+
+
+      if (left) {
+
+        Module.setStatus(
+          "Preparing... (" +
+          (
+            this.totalDependencies -
+            left
+          ) +
+          "/" +
+          this.totalDependencies +
+          ")"
+        );
+
+      } else {
+
+        Module.setStatus(
+          "All downloads complete."
+        );
+
       }
 
-      var g_pJSExceptionHandler = undefined;
+    }
 
-      function setJSExceptionHandler( exceptionHandler )
-      {
-        if (typeof exceptionHandler == "function") {
-            g_pJSExceptionHandler = exceptionHandler;
-        } // end if
-      } // end setJSExceptionHandler
+  };
 
-      function hasJSExceptionHandler()
-      {
-        return (g_pJSExceptionHandler != undefined) && (typeof g_pJSExceptionHandler == "function");
-      } // end hasJSExceptionHandler
 
-      function doJSExceptionHandler( exceptionJSON )
-      {
-        if (typeof g_pJSExceptionHandler == "function") {
-          var exception = JSON.parse( exceptionJSON );
-          g_pJSExceptionHandler( exception );
-        } // end if
-      } // end doJSExceptionHandler
+  Module.setStatus(
+    "Downloading..."
+  );
 
-		// Get Files
-      function manifestFiles()
-      {
-        return [ "runner.data",
-"runner.js",
-"runner.wasm",
-"audio-worklet.js",
-"game.unx" ].join( ";");
-      }
 
-		// Verify Files
-      function manifestFilesMD5()
-      {
-        return [ "64c52fe90575bb2e81703999947fd228",
-"8205c033904e1ce761eff28ed921da38",
-"b347cc99e3e72ed83507297e83c8a79e",
-"e8f1e8db8cf996f8715a6f2164c2e44e",
-"619c41bf1f2095125e1b3c43c1edd301" ];
-      }
+  /* =========================================================
+     ERROR HANDLING
+     ========================================================= */
 
-      function onFirstFrameRendered()
-      {
-          //console.log("First frame rendered!");
-      }
+  window.onerror = function(event) {
 
-      function onGameSetWindowSize(width,height)
-      {
-          if (startingHeight === undefined && startingWidth === undefined) {
-              console.log("Initial window size set to width: " + width + ", height: " + height);
+    Module.setStatus(
+      "Exception thrown, see JavaScript console"
+    );
 
-              startingHeight = height;
-              startingWidth = width;
-              startingAspect = startingWidth / startingHeight;
+    spinnerElement.style.display =
+      "none";
+
+    console.error(event);
+
+  };
+
+
+  /* =========================================================
+     URL ARGUMENTS
+     ========================================================= */
+
+  if (
+    typeof window === "object"
+  ) {
+
+    Module.arguments =
+      window.location.search
+        .substr(1)
+        .trim()
+        .split("&");
+
+
+    if (!Module.arguments[0]) {
+      Module.arguments = [];
+    }
+
+  }
+
+
+  /* =========================================================
+     CONSOLE TOGGLE
+     ========================================================= */
+
+  function toggleConsole() {
+
+    const isShown =
+      outputElement.style.display ===
+      "block";
+
+
+    if (isShown) {
+
+      outputElement.style.display =
+        "none";
+
+    } else {
+
+      outputElement.style.display =
+        "block";
+
+      outputElement.scrollIntoView({
+        block: "start"
+      });
+
+    }
+
+  }
+
+
+  /* =========================================================
+     GITHUB
+     ========================================================= */
+
+  function togglegithub() {
+
+    window.open(
+      "https://github.com/overbound/SonicTimeTwisted",
+      "_blank"
+    );
+
+  }
+
+
+  /* =========================================================
+     CLEAR CACHE
+     ========================================================= */
+
+  function toggleclear_site_cache() {
+
+    if (
+      !confirm(
+        "This Will Clear Site Cache\n" +
+        "This will ALSO Clear ALL SAVES\n\n" +
+        "ONLY do this if the Site has recently been Updated\n" +
+        "and if you are experiencing crashes relating to texture loading\n\n" +
+        "Continue?"
+      )
+    ) {
+      return;
+    }
+
+
+    (async () => {
+
+      try {
+
+        if (
+          "indexedDB" in window &&
+          typeof indexedDB.databases ===
+          "function"
+        ) {
+
+          const databases =
+            await indexedDB.databases();
+
+
+          for (
+            const database of databases
+          ) {
+
+            if (database.name) {
+              indexedDB.deleteDatabase(
+                database.name
+              );
+            }
+
           }
+
+        }
+
+      } catch (error) {
+
+        console.error(
+          "Failed to clear IndexedDB:",
+          error
+        );
+
       }
 
-	// Trigger Ads
-    function triggerAd(adId, _callback_beforeAd, _callback_afterAd, _callback_adDismissed, _callback_adViewed, _callback_adbreakDone) {
-       // need to take a copy of the RValues represented
-       var pRValueCopy = triggerAdPrefix( _callback_beforeAd, _callback_afterAd, _callback_adDismissed, _callback_adViewed, _callback_adbreakDone );
-       var pCallbackBeforeAd = pRValueCopy + (0*16);
-       var pCallbackAfterAd = pRValueCopy + (1*16);
-       var pCallbackAdDismissed = pRValueCopy + (2*16);
-       var pCallbackAdViewed = pRValueCopy + (3*16);
-       var pCallbackAdBreakDone = pRValueCopy + (4*16);
+      alert(
+        "All Site Cache Has Been Cleared!\n" +
+        "Please reload the Page"
+      );
 
-       adBreak({
-         "type": "reward",                    // The type of this placement
-         "name": adId,                        // A descriptive name for this placement
+    })();
 
-         "beforeAd": () => {                  // Prepare for the ad. Mute and pause the game flow
-           console.log("beforeAd");
-           // trigger _callback_beforeAd to game
-           doGMLCallback( pCallbackBeforeAd, { id:adId } );
-         },
-         "afterAd" : () => {                   // Resume the game and re-enable sound
-           console.log("afterAd");
-           // trigger _callback_afterAd to game
-           doGMLCallback( pCallbackAfterAd, { id:adId } );
-         },
-         "beforeReward": (showAdFn) => {      // Show reward prompt (call showAdFn() if clicked)
-           console.log("beforeReward");
-           showAdFn();
-           // Setup native prompt to indicate ad will load
-           // Will not be setup by dev so this UX controlled by GXC
-         },
-         "adDismissed": () => {               // Player dismissed the ad before it finished
-           console.log("adDismissed");
-           // trigger _callback_adDismissed to game
-           doGMLCallback( pCallbackAdDismissed, { id:adId } );
-         },
-         "adViewed": () => {                  // Player watched the ad–give them the reward.
-           console.log("adViewed");
-           // trigger _callback_adViewed to game
-           doGMLCallback( pCallbackAdViewed, { id:adId } );
-         },
-         "adBreakDone": (placementInfo) => {  // Always called (if provided) even if an ad didn't show
-           console.log("adBreakDone");
-           // trigger _callback_adBreakDone to game
-           doGMLCallback( pCallbackAdBreakDone, { id:adId } );
-           triggerAdPostfix( pRValueCopy );
-         }, 
-       });
+  }
+
+
+  /* =========================================================
+     FPS COUNTER
+     ========================================================= */
+
+  let stopfps = 0;
+
+
+  function toggleFPS() {
+
+    if (stopfps !== 0) {
+      return;
+    }
+
+
+    stopfps = 1;
+
+
+    const script =
+      document.createElement("script");
+
+
+    script.onload = function() {
+
+      if (
+        typeof Stats ===
+        "undefined"
+      ) {
+        return;
       }
 
-      function ensureAspectRatio() {
-        if (canvasElement === undefined) {
-          return;
-        }
 
-        if (!CHANGE_ASPECT_RATIO) {
-          return;
-        }
-        
-        if (startingHeight === undefined && startingWidth === undefined) {
-          return;
-        }
+      const stats =
+        new Stats();
 
-        canvasElement.classList.add("active");
+      document.body.appendChild(
+        stats.dom
+      );
 
-        const maxWidth = window.innerWidth;
-        const maxHeight = window.innerHeight;
-        var newHeight, newWidth;
 
-        // Find the limiting dimension.
-        var heightQuotient = startingHeight / maxHeight;
-        var widthQuotient = startingWidth / maxWidth;
+      /*
+        One requestAnimationFrame loop,
+        only created when the user requests it.
+      */
 
-        if (heightQuotient > widthQuotient) {
-          // Max out on height.
-          newHeight = maxHeight;
-          newWidth = newHeight * startingAspect;
-        } else {
-          // Max out on width.
-          newWidth = maxWidth;
-          newHeight = newWidth / startingAspect;
-        }
+      function updateStats() {
 
-        canvasElement.style.height = newHeight + "px";
-        canvasElement.style.width = newWidth + "px";
-      }
-		// To Pause when it detects the Tab is inactive
-      function pause() { // Don't change the name - GX Mobile calls it when the app becomes inactive.
-        if (!canvasElement.classList.contains("active")) { // Wait for the canvas to load.
-          return
-        }
-        
-        GM_pause();
-        pauseMenu.hidden = false;
-        canvasElement.classList.add("paused");
-      }
-		// To Resume when it detects the Tab is Active
-      function resume() {
-        GM_unpause();
-        pauseMenu.hidden = true;
-        canvasElement.classList.remove("paused");
-        canvasElement.classList.add("unpaused");
-        enterFullscreenIfSupported();
-        lockOrientationIfSupported();
+        stats.update();
+
+        requestAnimationFrame(
+          updateStats
+        );
+
       }
 
-      function quitIfSupported() {
-        if (window.oprt && window.oprt.closeTab) { /* GX Mobile API */
-          window.oprt.closeTab();
-        } else if (window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage) {
-          window.chrome.runtime.sendMessage('mpojjmidmnpcpopbebmecmjdkdbgdeke', { command: 'closeTab' })
-        }
+
+      requestAnimationFrame(
+        updateStats
+      );
+
+    };
+
+
+    script.src =
+      "https://mrdoob.github.io/stats.js/build/stats.min.js";
+
+
+    document.head.appendChild(
+      script
+    );
+
+  }
+
+
+  /* =========================================================
+     WEB PORTS
+     ========================================================= */
+
+  function togglewebports() {
+
+    window.open(
+      "https://burnedwebsite.vercel.app/projects/",
+      "_blank"
+    );
+
+  }
+
+
+  /* =========================================================
+     GAMEMAKER CALLBACKS
+     ========================================================= */
+
+  let g_pWadLoadCallback =
+    undefined;
+
+
+  function setWadLoadCallback(
+    _wadLoadCallback
+  ) {
+
+    g_pWadLoadCallback =
+      _wadLoadCallback;
+
+  }
+
+
+  let g_pAddAsyncMethod = -1;
+
+
+  function setAddAsyncMethod(
+    asyncMethod
+  ) {
+
+    g_pAddAsyncMethod =
+      asyncMethod;
+
+  }
+
+
+  let g_pJSExceptionHandler =
+    undefined;
+
+
+  function setJSExceptionHandler(
+    exceptionHandler
+  ) {
+
+    if (
+      typeof exceptionHandler ===
+      "function"
+    ) {
+
+      g_pJSExceptionHandler =
+        exceptionHandler;
+
+    }
+
+  }
+
+
+  function hasJSExceptionHandler() {
+
+    return (
+      g_pJSExceptionHandler !==
+      undefined &&
+      typeof g_pJSExceptionHandler ===
+      "function"
+    );
+
+  }
+
+
+  function doJSExceptionHandler(
+    exceptionJSON
+  ) {
+
+    if (
+      typeof g_pJSExceptionHandler ===
+      "function"
+    ) {
+
+      const exception =
+        JSON.parse(
+          exceptionJSON
+        );
+
+      g_pJSExceptionHandler(
+        exception
+      );
+
+    }
+
+  }
+
+
+  /* =========================================================
+     GAME FILE MANIFEST
+     ========================================================= */
+
+  function manifestFiles() {
+
+    return [
+      "runner.data",
+      "runner.js",
+      "runner.wasm",
+      "audio-worklet.js",
+      "game.unx"
+    ].join(";");
+
+  }
+
+
+  function manifestFilesMD5() {
+
+    return [
+      "64c52fe90575bb2e81703999947fd228",
+      "8205c033904e1ce761eff28ed921da38",
+      "b347cc99e3e72ed83507297e83c8a79e",
+      "e8f1e8db8cf996f8715a6f2164c2e44e",
+      "619c41bf1f2095125e1b3c43c1edd301"
+    ];
+
+  }
+
+
+  /* =========================================================
+     GAME WINDOW SIZE
+     ========================================================= */
+
+  function onFirstFrameRendered() {
+    /*
+      Intentionally empty.
+    */
+  }
+
+
+  function onGameSetWindowSize(
+    width,
+    height
+  ) {
+
+    if (
+      startingHeight === undefined &&
+      startingWidth === undefined
+    ) {
+
+      startingHeight =
+        height;
+
+      startingWidth =
+        width;
+
+      startingAspect =
+        width / height;
+
+    }
+
+  }
+
+
+  /* =========================================================
+     ADS
+     ========================================================= */
+
+  function triggerAd(
+    adId,
+    _callback_beforeAd,
+    _callback_afterAd,
+    _callback_adDismissed,
+    _callback_adViewed,
+    _callback_adbreakDone
+  ) {
+
+    const pRValueCopy =
+      triggerAdPrefix(
+        _callback_beforeAd,
+        _callback_afterAd,
+        _callback_adDismissed,
+        _callback_adViewed,
+        _callback_adbreakDone
+      );
+
+
+    const pCallbackBeforeAd =
+      pRValueCopy + (0 * 16);
+
+    const pCallbackAfterAd =
+      pRValueCopy + (1 * 16);
+
+    const pCallbackAdDismissed =
+      pRValueCopy + (2 * 16);
+
+    const pCallbackAdViewed =
+      pRValueCopy + (3 * 16);
+
+    const pCallbackAdBreakDone =
+      pRValueCopy + (4 * 16);
+
+
+    adBreak({
+
+      type: "reward",
+
+      name: adId,
+
+
+      beforeAd: () => {
+
+        doGMLCallback(
+          pCallbackBeforeAd,
+          { id: adId }
+        );
+
+      },
+
+
+      afterAd: () => {
+
+        doGMLCallback(
+          pCallbackAfterAd,
+          { id: adId }
+        );
+
+      },
+
+
+      beforeReward: showAdFn => {
+
+        showAdFn();
+
+      },
+
+
+      adDismissed: () => {
+
+        doGMLCallback(
+          pCallbackAdDismissed,
+          { id: adId }
+        );
+
+      },
+
+
+      adViewed: () => {
+
+        doGMLCallback(
+          pCallbackAdViewed,
+          { id: adId }
+        );
+
+      },
+
+
+      adBreakDone: placementInfo => {
+
+        doGMLCallback(
+          pCallbackAdBreakDone,
+          { id: adId }
+        );
+
+        triggerAdPostfix(
+          pRValueCopy
+        );
+
       }
 
-      function enterFullscreenIfSupported() {
-        if (!window.oprt || !window.oprt.enterFullscreen) { /* GX Mobile API */
-          return;
-        }
+    });
 
-        window.oprt.enterFullscreen();
-        let viewStatus = GM_get_view_status();
-        viewStatus.fullscreen = true;
-        GM_set_view_status(viewStatus);
+  }
+
+
+  /* =========================================================
+     ASPECT RATIO
+     ========================================================= */
+
+  let resizeFramePending = false;
+
+
+  function ensureAspectRatio() {
+
+    if (
+      !canvasElement ||
+      !CHANGE_ASPECT_RATIO
+    ) {
+      return;
+    }
+
+
+    if (
+      startingHeight === undefined ||
+      startingWidth === undefined
+    ) {
+      return;
+    }
+
+
+    /*
+      Don't repeatedly modify the canvas size
+      unless the size actually changed.
+    */
+
+    const maxWidth =
+      window.innerWidth;
+
+    const maxHeight =
+      window.innerHeight;
+
+
+    const heightQuotient =
+      startingHeight /
+      maxHeight;
+
+    const widthQuotient =
+      startingWidth /
+      maxWidth;
+
+
+    let newWidth;
+    let newHeight;
+
+
+    if (
+      heightQuotient >
+      widthQuotient
+    ) {
+
+      newHeight =
+        maxHeight;
+
+      newWidth =
+        newHeight *
+        startingAspect;
+
+    } else {
+
+      newWidth =
+        maxWidth;
+
+      newHeight =
+        newWidth /
+        startingAspect;
+
+    }
+
+
+    /*
+      Only touch style if something changed.
+    */
+
+    const width =
+      `${newWidth}px`;
+
+    const height =
+      `${newHeight}px`;
+
+
+    if (
+      canvasElement.style.width !==
+      width
+    ) {
+
+      canvasElement.style.width =
+        width;
+
+    }
+
+
+    if (
+      canvasElement.style.height !==
+      height
+    ) {
+
+      canvasElement.style.height =
+        height;
+
+    }
+
+
+    canvasElement.classList.add(
+      "active"
+    );
+
+  }
+
+
+  function scheduleResize() {
+
+    if (resizeFramePending) {
+      return;
+    }
+
+
+    resizeFramePending = true;
+
+
+    requestAnimationFrame(() => {
+
+      resizeFramePending = false;
+
+      ensureAspectRatio();
+
+    });
+
+  }
+
+
+  /* =========================================================
+     PAUSE / RESUME
+     ========================================================= */
+
+  function pause() {
+
+    if (
+      !canvasElement.classList.contains(
+        "active"
+      )
+    ) {
+      return;
+    }
+
+
+    GM_pause();
+
+    pauseMenu.hidden =
+      false;
+
+    canvasElement.classList.add(
+      "paused"
+    );
+
+  }
+
+
+  function resume() {
+
+    GM_unpause();
+
+    pauseMenu.hidden =
+      true;
+
+    canvasElement.classList.remove(
+      "paused"
+    );
+
+    canvasElement.classList.add(
+      "unpaused"
+    );
+
+
+    enterFullscreenIfSupported();
+
+    lockOrientationIfSupported();
+
+  }
+
+
+  /* =========================================================
+     QUIT
+     ========================================================= */
+
+  function quitIfSupported() {
+
+    if (
+      window.oprt &&
+      window.oprt.closeTab
+    ) {
+
+      window.oprt.closeTab();
+
+    } else if (
+      window.chrome &&
+      window.chrome.runtime &&
+      window.chrome.runtime.sendMessage
+    ) {
+
+      window.chrome.runtime.sendMessage(
+        "mpojjmidmnpcpopbebmecmjdkdbgdeke",
+        {
+          command: "closeTab"
+        }
+      );
+
+    }
+
+  }
+
+
+  /* =========================================================
+     FULLSCREEN
+     ========================================================= */
+
+  function enterFullscreenIfSupported() {
+
+    if (
+      !window.oprt ||
+      !window.oprt.enterFullscreen
+    ) {
+      return;
+    }
+
+
+    window.oprt.enterFullscreen();
+
+
+    const viewStatus =
+      GM_get_view_status();
+
+
+    viewStatus.fullscreen =
+      true;
+
+
+    GM_set_view_status(
+      viewStatus
+    );
+
+  }
+
+
+  /* =========================================================
+     ORIENTATION
+     ========================================================= */
+
+  function lockOrientationIfSupported() {
+
+    if (
+      !window.oprt ||
+      !window.oprt.lockPortraitOrientation ||
+      !window.oprt.lockLandscapeOrientation
+    ) {
+      return;
+    }
+
+
+    const viewStatus =
+      GM_get_view_status();
+
+
+    if (
+      viewStatus.landscape === true &&
+      viewStatus.portrait === false
+    ) {
+
+      window.oprt.lockLandscapeOrientation();
+
+    } else if (
+      viewStatus.landscape === false &&
+      viewStatus.portrait === true
+    ) {
+
+      window.oprt.lockPortraitOrientation();
+
+    }
+
+  }
+
+
+  /* =========================================================
+     RESIZE OBSERVER
+     ========================================================= */
+
+  const resizeObserver =
+    new ResizeObserver(
+      scheduleResize
+    );
+
+
+  resizeObserver.observe(
+    document.body
+  );
+
+
+  /*
+    Also catch browser rotation/window resizing.
+  */
+
+  window.addEventListener(
+    "resize",
+    scheduleResize,
+    {
+      passive: true
+    }
+  );
+
+
+  /* =========================================================
+     MOBILE
+     ========================================================= */
+
+  if (
+    /Android|iPhone|iPod/i.test(
+      navigator.userAgent
+    )
+  ) {
+
+    bodyElement.classList.add(
+      "scrollingDisabled"
+    );
+
+    /*
+      Removed the old animated canvas resize.
+      Animated resizing wastes rendering work.
+    */
+
+    outputContainerElement.hidden =
+      true;
+
+  }
+
+
+  /* =========================================================
+     VISIBILITY / TAB PAUSING
+     ========================================================= */
+
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+
+      if (
+        document.visibilityState !==
+        "visible"
+      ) {
+
+        pause();
+
       }
 
-      function lockOrientationIfSupported() {
-        if (!window.oprt || !window.oprt.lockPortraitOrientation || !window.oprt.lockLandscapeOrientation) { /* GX Mobile API */
-          return;
-        }
+    },
+    {
+      passive: true
+    }
+  );
 
-        let viewStatus = GM_get_view_status();
-        if (viewStatus.landscape === true && viewStatus.portrait === false) {
-          window.oprt.lockPortraitOrientation();
-        } else if (viewStatus.landscape === false && viewStatus.portrait === true) {
-          window.oprt.lockPortraitOrientation();
-        }
+
+  /* =========================================================
+     WINDOW LOAD
+     ========================================================= */
+
+  window.addEventListener(
+    "load",
+    () => {
+
+      if (
+        (
+          !window.oprt ||
+          !window.oprt.enterFullscreen
+        ) &&
+        (
+          !window.chrome ||
+          !window.chrome.runtime ||
+          !window.chrome.runtime.sendMessage
+        )
+      ) {
+
+        quitButton.hidden =
+          true;
+
       }
-		// uh, shit that no one cares about
-      const resizeObserver = new ResizeObserver(() => {
-        window.requestAnimationFrame(ensureAspectRatio);
-        setTimeout(() => window.requestAnimationFrame(ensureAspectRatio), 100);
-      });
-      resizeObserver.observe(document.body);
-		
-		// Disable Scrolling on Mobile
-      if (/Android|iPhone|iPod/i.test(navigator.userAgent)) {
-        bodyElement.className = "scrollingDisabled";
-        canvasElement.classList.add("animatedSizeTransitions");
-        outputContainerElement.hidden = true;
-      }
 
-      document.addEventListener("visibilitychange", (event) => {
-        if (document.visibilityState != "visible") {
-          pause();
-        }
-      });
+    },
+    {
+      once: true
+    }
+  );
 
-      window.addEventListener("load", (event) => {
-        if ((!window.oprt || !window.oprt.enterFullscreen) && (!window.chrome || !window.chrome.runtime || !window.chrome.runtime.sendMessage)) {
-          quitButton.hidden = true;
-        }
-      });
 
-      setWadLoadCallback(() => {
-        enterFullscreenIfSupported();
-        lockOrientationIfSupported();
-      });
-    </script>
-	<script async type="text/javascript" src="runner.js"></script>
-  </body>
+  /* =========================================================
+     WAD CALLBACK
+     ========================================================= */
+
+  setWadLoadCallback(() => {
+
+    enterFullscreenIfSupported();
+
+    lockOrientationIfSupported();
+
+  });
+
+  </script>
+
+
+  <!--
+    runner.js is intentionally loaded LAST.
+
+    The game.unx fetch/XHR hooks above must exist before
+    GameMaker starts requesting game.unx.
+  -->
+
+  <script
+    defer
+    src="runner.js">
+  </script>
+
+</body>
 </html>
+```
