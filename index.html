@@ -177,6 +177,77 @@
       border-radius: 15px;
     }
 
+
+    /* =========================================================
+       TOUCH CONTROLS
+       ========================================================= */
+
+    #touchControls {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      pointer-events: none;
+      display: none;
+      touch-action: none;
+    }
+
+    .touch-button {
+      position: absolute;
+      width: clamp(58px, 15vw, 84px);
+      height: clamp(58px, 15vw, 84px);
+      padding: 0;
+      margin: 0;
+      border: 2px solid rgba(255,255,255,.55);
+      border-radius: 50%;
+      background: rgba(0,0,0,.42);
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: clamp(25px, 7vw, 38px);
+      font-weight: bold;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: .72;
+      pointer-events: auto;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .touch-button.pressed,
+    .touch-button:active {
+      opacity: 1;
+      background: rgba(255,255,255,.28);
+      transform: scale(.94);
+    }
+
+    /* Four-way D-pad */
+    #touchLeft  { left: 18px;  bottom: 24px; }
+    #touchRight { left: 116px; bottom: 24px; }
+    #touchUp    { left: 67px;  bottom: 122px; }
+    #touchDown  { left: 67px;  bottom: 24px; }
+
+    @media (pointer: coarse), (max-width: 800px) {
+      #touchControls {
+        display: block;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 500px) {
+      #touchLeft  { left: 14px; bottom: 14px; }
+      #touchRight { left: 94px; bottom: 14px; }
+      #touchUp    { left: 54px; bottom: 94px; }
+      #touchDown  { left: 54px; bottom: 14px; }
+    }
+
+    /* Keep touch controls above the game but below the pause menu. */
+    #pauseMenuContainer {
+      z-index: 50;
+    }
+
     /* Bottom controls */
 
     .output-container {
@@ -411,6 +482,17 @@
     oncontextmenu="event.preventDefault()">
   </canvas>
 
+
+  <!-- =======================================================
+       TOUCH CONTROLS
+       ======================================================= -->
+
+  <div id="touchControls" aria-hidden="true">
+    <button class="touch-button" id="touchUp" type="button" aria-label="Up">▲</button>
+    <button class="touch-button" id="touchLeft" type="button" aria-label="Left">◀</button>
+    <button class="touch-button" id="touchDown" type="button" aria-label="Down">▼</button>
+    <button class="touch-button" id="touchRight" type="button" aria-label="Right">▶</button>
+  </div>
 
   <!-- =======================================================
        PAUSE MENU
@@ -905,6 +987,127 @@
   })();
   </script>
 
+
+
+  <!-- =======================================================
+       TOUCH INPUT BRIDGE
+       ======================================================= -->
+
+  <script>
+  (() => {
+    "use strict";
+
+    const touchButtons = [
+      ["touchLeft",  "ArrowLeft",  37],
+      ["touchUp",    "ArrowUp",    38],
+      ["touchRight", "ArrowRight", 39],
+      ["touchDown",  "ArrowDown",  40]
+    ];
+
+    function sendKeyboardEvent(type, key, keyCode) {
+      const event = new KeyboardEvent(type, {
+        key: key,
+        code: key,
+        keyCode: keyCode,
+        which: keyCode,
+        bubbles: true,
+        cancelable: true
+      });
+
+      /*
+       * Dispatch on window AND the canvas. GameMaker/Emscripten
+       * builds commonly listen at either level depending on the
+       * generated runtime.
+       */
+      window.dispatchEvent(event);
+
+      if (canvasElement) {
+        canvasElement.dispatchEvent(new KeyboardEvent(type, {
+          key: key,
+          code: key,
+          keyCode: keyCode,
+          which: keyCode,
+          bubbles: true,
+          cancelable: true
+        }));
+      }
+    }
+
+    function releaseAllTouchKeys() {
+      for (const [id, key, keyCode] of touchButtons) {
+        const button = document.getElementById(id);
+
+        if (button && button.classList.contains("pressed")) {
+          button.classList.remove("pressed");
+          sendKeyboardEvent("keyup", key, keyCode);
+        }
+      }
+    }
+
+    for (const [id, key, keyCode] of touchButtons) {
+      const button = document.getElementById(id);
+      if (!button) continue;
+
+      button.addEventListener("pointerdown", event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (button.classList.contains("pressed")) return;
+
+        button.classList.add("pressed");
+
+        try {
+          button.setPointerCapture(event.pointerId);
+        } catch (_) {}
+
+        sendKeyboardEvent("keydown", key, keyCode);
+      }, { passive: false });
+
+      const release = event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!button.classList.contains("pressed")) return;
+
+        button.classList.remove("pressed");
+        sendKeyboardEvent("keyup", key, keyCode);
+      };
+
+      button.addEventListener("pointerup", release, { passive: false });
+      button.addEventListener("pointercancel", release, { passive: false });
+      button.addEventListener("lostpointercapture", release, { passive: false });
+
+      button.addEventListener("contextmenu", event => {
+        event.preventDefault();
+      });
+    }
+
+    /*
+     * Never leave a virtual key stuck down if the browser
+     * switches tabs, loses focus, or the device rotates.
+     */
+    window.addEventListener("blur", releaseAllTouchKeys);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) releaseAllTouchKeys();
+    });
+
+    window.addEventListener("orientationchange", releaseAllTouchKeys);
+
+    /*
+     * Stop mobile scrolling/gestures while interacting with
+     * the buttons.
+     */
+    const touchControls = document.getElementById("touchControls");
+
+    if (touchControls) {
+      for (const type of ["touchstart", "touchmove", "touchend", "touchcancel"]) {
+        touchControls.addEventListener(type, event => {
+          event.preventDefault();
+        }, { passive: false });
+      }
+    }
+  })();
+  </script>
 
   <!-- =======================================================
        MAIN GAME SCRIPT
@@ -2132,9 +2335,8 @@
      ========================================================= */
 
   if (
-    /Android|iPhone|iPod/i.test(
-      navigator.userAgent
-    )
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    window.matchMedia("(pointer: coarse)").matches
   ) {
 
     bodyElement.classList.add(
