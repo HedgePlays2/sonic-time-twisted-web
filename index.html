@@ -1017,18 +1017,36 @@
     ];
 
     function makeKeyEvent(type, key, keyCode) {
-      return new KeyboardEvent(type, {
-        key,
+      const event = new KeyboardEvent(type, {
+        key: key,
         code: key === "z" ? "KeyZ" : key,
-        keyCode,
-        which: keyCode,
         bubbles: true,
         cancelable: true
       });
+
+      /*
+       * GameMaker/Emscripten uses legacy keyCode/which values for
+       * some keyboard inputs. KeyboardEvent's constructor does not
+       * reliably populate those properties, especially for Z, so
+       * explicitly define them.
+       */
+      try {
+        Object.defineProperty(event, "keyCode", {
+          value: keyCode,
+          enumerable: true
+        });
+        Object.defineProperty(event, "which", {
+          value: keyCode,
+          enumerable: true
+        });
+      } catch (_) {}
+
+      return event;
     }
 
     function sendKey(type, key, keyCode) {
-      window.dispatchEvent(makeKeyEvent(type, key, keyCode));
+      const event = makeKeyEvent(type, key, keyCode);
+      window.dispatchEvent(event);
 
       const canvas = document.getElementById("canvas");
       if (canvas) {
