@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="en-us">
 <head>
@@ -187,14 +186,14 @@
       inset: 0;
       z-index: 40;
       pointer-events: none;
-      display: none;
+      display: block;
       touch-action: none;
     }
 
     .touch-button {
       position: absolute;
-      width: clamp(58px, 15vw, 84px);
-      height: clamp(58px, 15vw, 84px);
+      width: clamp(58px, 14vw, 82px);
+      height: clamp(58px, 14vw, 82px);
       padding: 0;
       margin: 0;
       border: 2px solid rgba(255,255,255,.55);
@@ -202,7 +201,7 @@
       background: rgba(0,0,0,.42);
       color: #fff;
       font-family: Arial, sans-serif;
-      font-size: clamp(25px, 7vw, 38px);
+      font-size: clamp(24px, 6vw, 36px);
       font-weight: bold;
       line-height: 1;
       display: flex;
@@ -224,26 +223,34 @@
       transform: scale(.94);
     }
 
-    /* Four-way D-pad */
     #touchLeft  { left: 18px;  bottom: 24px; }
     #touchRight { left: 116px; bottom: 24px; }
     #touchUp    { left: 67px;  bottom: 122px; }
     #touchDown  { left: 67px;  bottom: 24px; }
 
-    @media (pointer: coarse), (max-width: 800px) {
-      #touchControls {
-        display: block;
-      }
+    #touchJump {
+      right: 24px;
+      bottom: 24px;
+    }
+
+    #touchPause {
+      right: 24px;
+      bottom: 122px;
+    }
+
+    .touch-action {
+      font-size: clamp(17px, 4.5vw, 28px);
     }
 
     @media (orientation: landscape) and (max-height: 500px) {
-      #touchLeft  { left: 14px; bottom: 14px; }
-      #touchRight { left: 94px; bottom: 14px; }
-      #touchUp    { left: 54px; bottom: 94px; }
-      #touchDown  { left: 54px; bottom: 14px; }
+      #touchLeft  { left: 14px;  bottom: 14px; }
+      #touchRight { left: 94px;  bottom: 14px; }
+      #touchUp    { left: 54px;  bottom: 94px; }
+      #touchDown  { left: 54px;  bottom: 14px; }
+      #touchJump  { right: 14px; bottom: 14px; }
+      #touchPause { right: 14px; bottom: 94px; }
     }
 
-    /* Keep touch controls above the game but below the pause menu. */
     #pauseMenuContainer {
       z-index: 50;
     }
@@ -492,6 +499,9 @@
     <button class="touch-button" id="touchLeft" type="button" aria-label="Left">◀</button>
     <button class="touch-button" id="touchDown" type="button" aria-label="Down">▼</button>
     <button class="touch-button" id="touchRight" type="button" aria-label="Right">▶</button>
+
+    <button class="touch-button touch-action" id="touchJump" type="button" aria-label="Jump">Z</button>
+    <button class="touch-button touch-action" id="touchPause" type="button" aria-label="Pause">ENTER</button>
   </div>
 
   <!-- =======================================================
@@ -1001,50 +1011,42 @@
       ["touchLeft",  "ArrowLeft",  37],
       ["touchUp",    "ArrowUp",    38],
       ["touchRight", "ArrowRight", 39],
-      ["touchDown",  "ArrowDown",  40]
+      ["touchDown",  "ArrowDown",  40],
+      ["touchJump",  "z",           90],
+      ["touchPause", "Enter",       13]
     ];
 
-    function sendKeyboardEvent(type, key, keyCode) {
-      const event = new KeyboardEvent(type, {
-        key: key,
-        code: key,
-        keyCode: keyCode,
+    function makeKeyEvent(type, key, keyCode) {
+      return new KeyboardEvent(type, {
+        key,
+        code: key === "z" ? "KeyZ" : key,
+        keyCode,
         which: keyCode,
         bubbles: true,
         cancelable: true
       });
+    }
 
-      /*
-       * Dispatch on window AND the canvas. GameMaker/Emscripten
-       * builds commonly listen at either level depending on the
-       * generated runtime.
-       */
-      window.dispatchEvent(event);
+    function sendKey(type, key, keyCode) {
+      window.dispatchEvent(makeKeyEvent(type, key, keyCode));
 
-      if (canvasElement) {
-        canvasElement.dispatchEvent(new KeyboardEvent(type, {
-          key: key,
-          code: key,
-          keyCode: keyCode,
-          which: keyCode,
-          bubbles: true,
-          cancelable: true
-        }));
+      const canvas = document.getElementById("canvas");
+      if (canvas) {
+        canvas.dispatchEvent(makeKeyEvent(type, key, keyCode));
       }
     }
 
-    function releaseAllTouchKeys() {
-      for (const [id, key, keyCode] of touchButtons) {
+    function releaseAll() {
+      for (const [id, key, code] of touchButtons) {
         const button = document.getElementById(id);
-
         if (button && button.classList.contains("pressed")) {
           button.classList.remove("pressed");
-          sendKeyboardEvent("keyup", key, keyCode);
+          sendKey("keyup", key, code);
         }
       }
     }
 
-    for (const [id, key, keyCode] of touchButtons) {
+    for (const [id, key, code] of touchButtons) {
       const button = document.getElementById(id);
       if (!button) continue;
 
@@ -1060,7 +1062,7 @@
           button.setPointerCapture(event.pointerId);
         } catch (_) {}
 
-        sendKeyboardEvent("keydown", key, keyCode);
+        sendKey("keydown", key, code);
       }, { passive: false });
 
       const release = event => {
@@ -1070,33 +1072,22 @@
         if (!button.classList.contains("pressed")) return;
 
         button.classList.remove("pressed");
-        sendKeyboardEvent("keyup", key, keyCode);
+        sendKey("keyup", key, code);
       };
 
       button.addEventListener("pointerup", release, { passive: false });
       button.addEventListener("pointercancel", release, { passive: false });
       button.addEventListener("lostpointercapture", release, { passive: false });
-
-      button.addEventListener("contextmenu", event => {
-        event.preventDefault();
-      });
+      button.addEventListener("contextmenu", event => event.preventDefault());
     }
 
-    /*
-     * Never leave a virtual key stuck down if the browser
-     * switches tabs, loses focus, or the device rotates.
-     */
-    window.addEventListener("blur", releaseAllTouchKeys);
+    window.addEventListener("blur", releaseAll);
+    window.addEventListener("orientationchange", releaseAll);
+
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) releaseAllTouchKeys();
+      if (document.hidden) releaseAll();
     });
 
-    window.addEventListener("orientationchange", releaseAllTouchKeys);
-
-    /*
-     * Stop mobile scrolling/gestures while interacting with
-     * the buttons.
-     */
     const touchControls = document.getElementById("touchControls");
 
     if (touchControls) {
@@ -2439,4 +2430,3 @@
 
 </body>
 </html>
-```
