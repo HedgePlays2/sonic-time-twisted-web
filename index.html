@@ -1012,14 +1012,14 @@
       ["touchUp",    "ArrowUp",    38],
       ["touchRight", "ArrowRight", 39],
       ["touchDown",  "ArrowDown",  40],
-      ["touchJump",  "z",           90],
+      ["touchJump",  "a",           65],
       ["touchPause", "Enter",       13]
     ];
 
     function makeKeyEvent(type, key, keyCode) {
       const event = new KeyboardEvent(type, {
         key: key,
-        code: key === "z" ? "KeyZ" : key,
+        code: key === "a" ? "KeyA" : (key === "z" ? "KeyZ" : key),
         bubbles: true,
         cancelable: true
       });
