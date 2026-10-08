@@ -9,7 +9,7 @@
   <meta name="viewport"
         content="viewport-fit=cover,width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1">
 
-  <link rel="icon" type="image/x-icon" href="icon.png">
+  <link rel="icon" type="image/x-icon" href="favicon.png">
 
   <title>Sonic Time Twisted Web Port</title>
 
@@ -192,68 +192,58 @@
 
     .touch-button {
       position: absolute;
-      width: clamp(58px, 14vw, 82px);
-      height: clamp(58px, 14vw, 82px);
+      width: 76px;
+      height: 76px;
       padding: 0;
       margin: 0;
-      border: 2px solid rgba(255,255,255,.55);
-      border-radius: 50%;
-      background: rgba(0,0,0,.42);
+      border: 2px solid rgba(210,210,210,.62);
+      border-radius: 16px;
+      background: rgba(45,45,45,.78);
       color: #fff;
       font-family: Arial, sans-serif;
-      font-size: clamp(24px, 6vw, 36px);
+      font-size: 34px;
       font-weight: bold;
       line-height: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: .72;
+      opacity: .88;
       pointer-events: auto;
       -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
       touch-action: none;
       -webkit-tap-highlight-color: transparent;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.08);
     }
 
     .touch-button.pressed,
     .touch-button:active {
       opacity: 1;
-      background: rgba(255,255,255,.28);
-      transform: scale(.94);
+      background: rgba(110,110,110,.86);
+      transform: none;
     }
 
-    #touchLeft  { left: 18px;  bottom: 24px; }
-    #touchRight { left: 116px; bottom: 24px; }
-    #touchUp    { left: 67px;  bottom: 122px; }
-    #touchDown  { left: 67px;  bottom: 24px; }
+    /* Connected cross-shaped D-pad, like the reference image. */
+    #touchUp    { left: 72px;  bottom: 100px; border-radius: 18px 18px 4px 4px; }
+    #touchLeft  { left: 6px;   bottom: 34px;  border-radius: 18px 4px 4px 18px; }
+    #touchRight { left: 138px; bottom: 34px;  border-radius: 4px 18px 18px 4px; }
+    #touchDown  { left: 72px;  bottom: 0;     border-radius: 4px 4px 18px 18px; }
 
-    #touchJump {
-      right: 24px;
-      bottom: 24px;
-    }
-
-    #touchPause {
-      right: 24px;
-      bottom: 122px;
-    }
-
-    .touch-action {
-      font-size: clamp(17px, 4.5vw, 28px);
-    }
+    #touchJump  { right: 24px; bottom: 24px; }
+    #touchPause { right: 24px; bottom: 122px; }
+    .touch-action { font-size: 18px; }
 
     @media (orientation: landscape) and (max-height: 500px) {
-      #touchLeft  { left: 14px;  bottom: 14px; }
-      #touchRight { left: 94px;  bottom: 14px; }
-      #touchUp    { left: 54px;  bottom: 94px; }
-      #touchDown  { left: 54px;  bottom: 14px; }
+      #touchUp    { left: 58px;  bottom: 86px; }
+      #touchLeft  { left: 0;     bottom: 20px; }
+      #touchRight { left: 116px; bottom: 20px; }
+      #touchDown  { left: 58px;  bottom: -14px; }
       #touchJump  { right: 14px; bottom: 14px; }
       #touchPause { right: 14px; bottom: 94px; }
     }
 
-    #pauseMenuContainer {
-      z-index: 50;
-    }
+    #pauseMenuContainer { z-index: 50; }
 
     /* Bottom controls */
 
